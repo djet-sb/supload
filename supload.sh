@@ -6,7 +6,7 @@
 # Cloud Files API (such as OpenStack Swift).
 #
 # Site: https://github.com/selectel/supload
-# Version: 2.6
+# Version: 2.7
 #
 # Feature:
 # - recursive upload
@@ -15,6 +15,7 @@
 # - expiring files
 # - exclude files matches pattern
 # - find and upload only newest files
+# - limit upload speed
 #
 # Requires:
 # - util curl
@@ -27,6 +28,8 @@
 # - Konstantin Kapustin <sirkonst@gmail.com>
 #
 # Changes:
+# - 2.7:
+#   - limit upload speed (-s)
 # - 2.6:
 #   - added new option for find&filter files by modified time  (-m)
 #   - fixed parser for etag header
@@ -54,7 +57,7 @@
 set -o noglob
 
 usage() {
-    echo "USAGE: $0 [-a auth_url] -u <USER> -k <KEY> [-r] [-M] [-m <filter>] [-d NUM<m:h:d>] [[-e pattern]...] <dest_dir> <src_path>"
+    echo "USAGE: $0 [-a auth_url] -u <USER> -k <KEY> [-r] [-M] [-m <filter>] [-s <speed>] [-d NUM<m:h:d>] [[-e pattern]...] <dest_dir> <src_path>"
     echo -e "Options:"
     echo -e "\t-a <auth_url>\tauthentication url (default: https://auth.selcdn.ru/)"
     echo -e "\t-u <USER>\tuser name"
@@ -65,7 +68,8 @@ usage() {
     echo -e "\t-q\t\tquiet mode (error output only)"
     echo -e "\t-e pattern\texclude files by pattern (shell pattern syntax)"
     echo -e "\t-c\t\tenable force detect mime type for file and set content-type for uploading file (usually the storage can do it self)"
-    echo -e "\t-m\t\tadd MTIME filter. Usefull to upload only new files in large directory."
+    echo -e "\t-m\t\tadd MTIME filter. Usefull to upload only new files in large directory"
+    echo -e "\t-s\t\tSpecify the maximum transfer rate you want use to upload. Supported appendix 'K', 'M', 'G'"
     echo "Params:"
     echo -e "\t <dest_dir>\tdestination directory or container in storage (ex. container/dir1/), not a file name"
     echo -e "\t <src_path>\tsource file or directory"
@@ -84,6 +88,7 @@ _ttlsec=""
 QUIETMODE="0"
 DETECT_MIMETYPE="0"
 MTIME=""
+SPEED=""
 declare -a EXCLUDE_LIST
 
 # Utils
@@ -120,7 +125,7 @@ for arg in "$@"; do
     i=$((i + 1))
 done
 
-while getopts ":ra:u:k:d:Mqe:c:m:" Option; do
+while getopts ":ra:u:k:d:Mqe:c:m:s:" Option; do
     case $Option in
             r ) RECURSIVEMODE="1";;
             a ) AUTH_URL="$OPTARG";;
@@ -132,6 +137,7 @@ while getopts ":ra:u:k:d:Mqe:c:m:" Option; do
             e ) EXCLUDE_LIST=( "${EXCLUDE_LIST[@]}" "$OPTARG" );;
             c ) DETECT_MIMETYPE="1";;
             m ) MTIME="$OPTARG";;
+            s ) SPEED="$OPTARG";;
             * ) echo "[!] Invalid option" && usage && exit 1;;
     esac
 done
@@ -434,9 +440,14 @@ _upload() {
         header_auto_delete="-H X-Delete-After:$_ttlsec"
     fi
 
+    opts="${CURLOPTS}"
+    if [[ -n "$SPEED" ]]; then
+        opts="${CURLOPTS} --limit-rate ${SPEED}"
+    fi
+
     # uploading
     temp_file=`mktemp /tmp/.supload.XXXXXX`
-    $CURL ${CURLOPTS} -X PUT -H "X-Auth-Token: ${AUTH_TOKEN}" $header_content_type $header_etage $header_auto_delete "$dest_url" -g -T "$src" -s -D "$temp_file" 1> /dev/null
+    $CURL ${opts} -X PUT -H "X-Auth-Token: ${AUTH_TOKEN}" $header_content_type $header_etage $header_auto_delete "$dest_url" -g -T "$src" -s -D "$temp_file" 1> /dev/null
 
     resp_status=`cat "${temp_file}" | head -n1 | tr -d '\r'`
     resp_status="${resp_status#* }"

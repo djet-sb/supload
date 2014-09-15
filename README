@@ -15,6 +15,9 @@ Feature
 * upload only modified files
 * expiring files
 * exclude files matches pattern
+* find and upload only newest files
+* limit upload speed
+
 
 Restrictions
 ------------
@@ -78,9 +81,17 @@ Upload only files modified in the last 7 days (option ``-m``)::
 
     $ ./supload.sh -u USERNAME -k USERKEY -r -m -7 storage_dir local_dir/
 
+Limit upload speed (option ``-s``)::
+
+    $ ./supload.sh -u USERNAME -k USERKEY -r -s 2M storage_dir local_dir/
+
 
 Changes
 -------
+
+2.7:
+
+* limit upload speed (-s)
 
 2.6:
 
