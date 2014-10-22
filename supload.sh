@@ -72,6 +72,7 @@ Options:
     -d NUM<m:h:d>  auto delete file in storage after NUM minutes or hours or days (ex. 7d)
     -s NUM<K:M:G>  specify the maximum transfer rate you want use to upload (ex. 1M)
     -m FILTER      add MTIME filter. Usefull to upload only new files in large directory (find -mtime syntax, ex. -1)
+    -z FORMAT      Treat file as archive of a given type and extract it after upload. Supported formats: tar, tar.gz, tar.bz2
     -c             enable detect mime type for file and set content-type for uploading file (usually the storage can do it self)
     -q             quiet mode (error output only)
 
@@ -96,6 +97,7 @@ QUIETMODE="0"
 DETECT_MIMETYPE="0"
 MTIME=""
 SPEED=""
+EXTRACT_ARCHIVE=""
 declare -a EXCLUDE_LIST
 
 # Utils
@@ -132,7 +134,7 @@ for arg in "$@"; do
     i=$((i + 1))
 done
 
-while getopts ":ra:u:k:d:Mqe:c:m:s:" Option; do
+while getopts ":ra:u:k:d:Mqe:c:m:s:z:" Option; do
     case $Option in
             r ) RECURSIVEMODE="1";;
             a ) AUTH_URL="$OPTARG";;
@@ -145,6 +147,7 @@ while getopts ":ra:u:k:d:Mqe:c:m:s:" Option; do
             c ) DETECT_MIMETYPE="1";;
             m ) MTIME="$OPTARG";;
             s ) SPEED="$OPTARG";;
+            z ) EXTRACT_ARCHIVE="$OPTARG";;
             * ) echo "[!] Invalid option" && usage && exit 1;;
     esac
 done
@@ -163,6 +166,23 @@ fi
 if [[ -z "$USER" || -z "$KEY" || -z "$1"  || -z "$2" ]]; then
     usage
     exit 1
+fi
+
+if [ -n "$EXTRACT_ARCHIVE" ]; then
+    case "$EXTRACT_ARCHIVE" in
+        "tar") ;;
+        "tar.gz") ;;
+        "tar.bz2") ;;
+        *) echo "[!] Invalid format for option -z" && exit 1;;
+    esac
+
+    if [ -n "$RECURSIVEMODE" ]; then
+        echo "[!] Option -z doen't support recursive upload (-r)"
+        exit 1
+    fi
+
+    DETECT_MIMETYPE=""
+    MD5CHECK=""
 fi
 
 _expire_invalid() {
@@ -446,6 +466,10 @@ _upload() {
         header_auto_delete="-H X-Delete-After:$_ttlsec"
     fi
 
+    if [[ -n "$EXTRACT_ARCHIVE" ]]; then
+        dest_url="${dest_url}?extract-archive=${EXTRACT_ARCHIVE}"
+    fi
+
     opts="${CURLOPTS}"
     if [[ -n "$SPEED" ]]; then
         opts="${CURLOPTS} --limit-rate ${SPEED}"
@@ -457,6 +481,36 @@ _upload() {
 
     resp_status=`cat "${temp_file}" | head -n1 | tr -d '\r'`
     resp_status="${resp_status#* }"
+
+    # -- successful upload
+    if [ "$resp_status" == "201 Created" ]; then
+        # get hash for uploaded file (from response)
+        etag=`cat "${temp_file}" | egrep -i -w -o "etag: .+" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/etag: //g'`
+
+        if [[ -n "$EXTRACT_ARCHIVE" ]]; then
+            rm -f "${temp_file}"
+            echo "(archive unpacked)"
+            return
+        fi
+
+        if [ -z "$etag" ]; then
+            rm -f "${temp_file}"
+            return 1
+        fi
+
+        if [ "$MD5CHECK" == "1" ]; then
+            if [ "z$etag" != "z$filehash" ]; then
+                rm -f "${temp_file}"
+                return 6
+            fi
+        fi
+
+        rm -f "${temp_file}"
+        echo "$etag"
+        return
+    fi
+
+    # -- handler error responses
     if [ "$resp_status" == "403 Forbidden" ]; then
         rm -f "${temp_file}"
         return 2
@@ -465,26 +519,6 @@ _upload() {
         rm -f "${temp_file}"
         return 2
     fi
-
-    # get hash for uploaded file (from response)
-    etag=`cat "${temp_file}" | egrep -i -w -o "etag: .+" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/etag: //g'`
-
-    if [ -z "$etag" ]; then
-        #cat "${temp_file}"
-        rm -f "${temp_file}"
-        return 1
-    fi
-
-    if [ "$MD5CHECK" == "1" ]; then
-        if [ "z$etag" != "z$filehash" ]; then
-            rm -f "${temp_file}"
-            return 6
-        fi
-    fi
-
-    rm -f "${temp_file}"
-
-    echo "$etag"
 }
 
 
