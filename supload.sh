@@ -71,7 +71,7 @@ Options:
     -e PATTERN     exclude files by pattern (shell pattern syntax, ex. .git/*)
     -d NUM<m:h:d>  auto delete file in storage after NUM minutes or hours or days (ex. 7d)
     -s NUM<K:M:G>  specify the maximum transfer rate you want use to upload (ex. 1M)
-    -m <filter>    add MTIME filter. Usefull to upload only new files in large directory (find -mtime syntax, ex. -1)
+    -m FILTER      add MTIME filter. Usefull to upload only new files in large directory (find -mtime syntax, ex. -1)
     -c             enable detect mime type for file and set content-type for uploading file (usually the storage can do it self)
     -q             quiet mode (error output only)
 
