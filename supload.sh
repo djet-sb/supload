@@ -56,24 +56,31 @@
 ####################################################
 set -o noglob
 
+
 usage() {
-    echo "USAGE: $0 [-a auth_url] -u <USER> -k <KEY> [-r] [-M] [-m <filter>] [-s <speed>] [-d NUM<m:h:d>] [[-e pattern]...] <dest_dir> <src_path>"
-    echo -e "Options:"
-    echo -e "\t-a <auth_url>\tauthentication url (default: https://auth.selcdn.ru/)"
-    echo -e "\t-u <USER>\tuser name"
-    echo -e "\t-k <KEY>\tuser password"
-    echo -e "\t-r\t\trecursive upload"
-    echo -e "\t-M\t\tdisable check upload by md5 sum"
-    echo -e "\t-d NUM<m:h:d>\tauto delete file in storage after NUM minutes or hours or days (default disable)"
-    echo -e "\t-q\t\tquiet mode (error output only)"
-    echo -e "\t-e pattern\texclude files by pattern (shell pattern syntax)"
-    echo -e "\t-c\t\tenable force detect mime type for file and set content-type for uploading file (usually the storage can do it self)"
-    echo -e "\t-m\t\tadd MTIME filter. Usefull to upload only new files in large directory"
-    echo -e "\t-s\t\tSpecify the maximum transfer rate you want use to upload. Supported appendix 'K', 'M', 'G'"
-    echo "Params:"
-    echo -e "\t <dest_dir>\tdestination directory or container in storage (ex. container/dir1/), not a file name"
-    echo -e "\t <src_path>\tsource file or directory"
+    cat <<EOF
+Usage:
+    supload.sh [-a AUTH_URL] -u <USER> -k <KEY> [-r] [[-e PATTERN]...] [options] <dest_dir> <src_path>
+
+Options:
+    -a AUTH_URL    authentication url (default: https://auth.selcdn.ru/)
+    -u USER        user name
+    -k KEY         user password
+    -r             recursive upload
+    -M             force upload without check by md5 sum
+    -e PATTERN     exclude files by pattern (shell pattern syntax, ex. .git/*)
+    -d NUM<m:h:d>  auto delete file in storage after NUM minutes or hours or days (ex. 7d)
+    -s NUM<K:M:G>  specify the maximum transfer rate you want use to upload (ex. 1M)
+    -m <filter>    add MTIME filter. Usefull to upload only new files in large directory (find -mtime syntax, ex. -1)
+    -c             enable detect mime type for file and set content-type for uploading file (usually the storage can do it self)
+    -q             quiet mode (error output only)
+
+Params:
+     <dest_dir>    destination directory or container in storage (ex. container/dir1/), not a file name
+     <src_path>    source file or directory
+EOF
 }
+
 
 # Defaults
 AUTH_URL="https://auth.selcdn.ru/"
@@ -154,7 +161,6 @@ elif [ -n "$KEY" ]; then
 fi
 
 if [[ -z "$USER" || -z "$KEY" || -z "$1"  || -z "$2" ]]; then
-    echo "[!] Missing params"
     usage
     exit 1
 fi
@@ -487,6 +493,9 @@ _upload() {
 # params:
 # * $1 - destination path in stotage
 # * $2 - local file path
+# ret_codes:
+# * 0 - successfully
+# * 1 - fail
 upload() {
     local count
     local src
@@ -526,13 +535,13 @@ upload() {
             fi
 
             if [ $rc -eq 1 ]; then
-                msg "[.] Attempt failed, try uploading again."
+                msg "[!] Attempt failed, try uploading again"
                 sleep "$count"
                 continue
             fi
 
             if [ $rc -eq 2 ]; then
-                msg "[.] Access denied, try reauth and uploading again."
+                msg "[!] Access denied, try reauth and uploading again"
                 sleep "$count"
                 need_reauth="1"
                 continue
@@ -549,12 +558,12 @@ upload() {
             fi
 
             if [ $rc -eq 5 ]; then
-                msg "[.] File already uploaded."
+                msg "[.] File already uploaded"
                 return
             fi
 
             if [ $rc -eq 6 ]; then
-                msg "[.] Hash doesn't match after uploading."
+                msg "[!] Hash doesn't match after uploading"
                 sleep "$count"
                 continue
             fi
@@ -615,6 +624,12 @@ main() {
 
         upload "$dest" "$src"
     done
+
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        echo "[*] All files uploaded"
+        exit 0
+    fi
 }
 
 main
