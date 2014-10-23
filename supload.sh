@@ -226,9 +226,28 @@ SRC_PATH="${SRC_PATH%/.}"
 SRC_PATH="${SRC_PATH%/}"
 
 ## Print message
+# params:
+# * $1 - level: 0 - info, 1 - error, 2 - debug info
+# * $2 - message
 msg() {
-    if [ "$QUIETMODE" == "0" ]; then
-        echo "$1"
+    if [ "$1" == "0" ]; then
+        if [ "$QUIETMODE" == "0" ]; then
+            echo "$2"
+            return
+        fi
+        return
+    fi
+
+    if [ "$1" == "1" ]; then
+        echo "$2"
+        return
+    fi
+
+    if [ "$1" == "2" ]; then
+        echo "[DEBUG]:"
+        echo "$2"
+        echo "[^^^^^]"
+        return
     fi
 }
 
@@ -405,6 +424,8 @@ check_container() {
 # * 4 - can't calc file hash
 # * 5 - file already uploaded
 # * 6 - hash doesn't match
+# * 7 - invalid request
+# return: some info about uploaded file or error messages
 _upload() {
     local temp_file
     local dest
@@ -419,6 +440,7 @@ _upload() {
     local header_content_type
     local resp_status
     local rc
+    local response
 
     dest="$1"
     src="$2"
@@ -478,47 +500,51 @@ _upload() {
     # uploading
     temp_file=`mktemp /tmp/.supload.XXXXXX`
     $CURL ${opts} -X PUT -H "X-Auth-Token: ${AUTH_TOKEN}" $header_content_type $header_etage $header_auto_delete "$dest_url" -g -T "$src" -s -D "$temp_file" 1> /dev/null
+    response=`cat "${temp_file}"`
+    rm -f "${temp_file}"
 
-    resp_status=`cat "${temp_file}" | head -n1 | tr -d '\r'`
+    resp_status=`echo "$response" | head -n1 | tr -d '\r'`
     resp_status="${resp_status#* }"
 
     # -- successful upload
     if [ "$resp_status" == "201 Created" ]; then
         # get hash for uploaded file (from response)
-        etag=`cat "${temp_file}" | egrep -i -w -o "etag: .+" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/etag: //g'`
+        etag=`echo "$response" | egrep -i -w -o "etag: .+" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/etag: //g'`
 
         if [[ -n "$EXTRACT_ARCHIVE" ]]; then
-            rm -f "${temp_file}"
-            echo "(archive unpacked)"
+            echo "Archive unpacked"
             return
         fi
 
         if [ -z "$etag" ]; then
-            rm -f "${temp_file}"
+            echo "$response"
             return 1
         fi
 
         if [ "$MD5CHECK" == "1" ]; then
             if [ "z$etag" != "z$filehash" ]; then
-                rm -f "${temp_file}"
+                echo "$response"
                 return 6
             fi
         fi
 
-        rm -f "${temp_file}"
-        echo "$etag"
+        echo "ETag: $etag"
         return
     fi
 
     # -- handler error responses
+    echo "$response"
     if [ "$resp_status" == "403 Forbidden" ]; then
-        rm -f "${temp_file}"
         return 2
     fi
     if [ "$resp_status" == "401 Unauthorized" ]; then
-        rm -f "${temp_file}"
         return 2
     fi
+    if [ "$resp_status" == "400 Bad Request" ]; then
+        return 7
+    fi
+
+    return 1
 }
 
 
@@ -535,6 +561,7 @@ upload() {
     local src
     local dst
     local need_reauth
+    local out
 
     dst="$1"
     src="$2"
@@ -544,7 +571,7 @@ upload() {
     while [ 1 ]; do
             ((++count))
             if [ $count -gt 5 ]; then
-                echo "[!] Failed upload $src after $((count - 1)) attempts."
+                msg 1 "[!] Failed upload $src after $((count - 1)) attempts."
                 return 1
             fi
 
@@ -559,51 +586,59 @@ upload() {
                 fi
             fi
 
-            msg "[.] Uploading $src..."
-            etag=$(_upload "$dst" "$src")
+            msg 0 "[.] Uploading $src..."
+            out=$(_upload "$dst" "$src")
             rc=$?
 
             if [ $rc -eq 0 ]; then
-                msg "[*] Uploaded OK! Etag: $etag"
+                msg 0 "[*] Uploaded OK! $out"
                 return
             fi
 
             if [ $rc -eq 1 ]; then
-                msg "[!] Attempt failed, try uploading again"
+                msg 1 "[!] Attempt failed, try uploading again"
                 sleep "$count"
                 continue
             fi
 
             if [ $rc -eq 2 ]; then
-                msg "[!] Access denied, try reauth and uploading again"
+                msg 1 "[!] Access denied, try reauth and uploading again"
                 sleep "$count"
                 need_reauth="1"
                 continue
             fi
 
             if [ $rc -eq 3 ]; then
-                echo "[!] Source file $src doesn't exist!"
+                msg 1 "[!] Source file $src doesn't exist!"
                 return 1
             fi
 
             if [ $rc -eq 4 ]; then
-                echo "[!] Error with calculate file hash, skip uploading $src"
+                msg 1 "[!] Error with calculate file hash, skip uploading $src"
                 return 1
             fi
 
             if [ $rc -eq 5 ]; then
-                msg "[.] File already uploaded"
+                msg 0 "[.] File already uploaded"
                 return
             fi
 
             if [ $rc -eq 6 ]; then
-                msg "[!] Hash doesn't match after uploading"
+                msg 1 "[!] Hash doesn't match after uploading"
+                msg 2 "$out"
                 sleep "$count"
                 continue
             fi
 
-            echo "[!] Unknown error, failed upload $src"
-            return 1
+            if [ $rc -eq 7 ]; then
+                msg 1 "[!] Something is wrong with the upload request:"
+                msg 2 "$out"
+                return 1
+            fi
+
+            msg 1 "[!] Unknown error, failed upload $src"
+            msg 2 "$out"
+            return 1.
     done
 }
 

@@ -155,7 +155,7 @@ rm ./file-for-test-mtime
 tar -cjf test-upload.tar.bz2 --exclude test-upload.tar.bz2  "$DIR1"
 test_ok "upload and extract archive (-z)" \
     "$SUPLOAD -a $AURL -u $USER -k $UPWD -z tar.bz2 $DEST/extract test-upload.tar.bz2" \
-    && with_match "(archive unpacked)" \
+    && with_match "Archive unpacked" \
     && with_match "Uploaded OK" \
 && echo "[ OK ]"
 rm test-upload.tar.bz2
