@@ -6,7 +6,7 @@
 # Cloud Files API (such as OpenStack Swift).
 #
 # Site: https://github.com/selectel/supload
-# Version: 2.7
+# Version: 3
 #
 # Feature:
 # - recursive upload
@@ -16,6 +16,7 @@
 # - exclude files matches pattern
 # - find and upload only newest files
 # - limit upload speed
+# - auto unpacks archive on uploading (if storage supports)
 #
 # Requires:
 # - util curl
@@ -28,6 +29,10 @@
 # - Konstantin Kapustin <sirkonst@gmail.com>
 #
 # Changes:
+# - 3.0:
+#   - unpack archive
+#   - improve handle error and debug output
+#   - add functional tests
 # - 2.7:
 #   - limit upload speed (-s)
 # - 2.6:

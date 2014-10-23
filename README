@@ -17,6 +17,7 @@ Feature
 * exclude files matches pattern
 * find and upload only newest files
 * limit upload speed
+* auto unpacks archive on uploading (if storage supports)
 
 
 Restrictions
@@ -46,7 +47,7 @@ You may move script to /usr/bin or /usr/local/bin if want::
 Usage
 -----
 
-By default the script work with Selectel Cloud Storage.
+By default the script work with `Selectel Cloud Storage <http://storage.selectel.ru/>`_.
 
 Get help::
 
@@ -85,9 +86,19 @@ Limit upload speed (option ``-s``)::
 
     $ ./supload.sh -u USERNAME -k USERKEY -r -s 2M storage_dir local_dir/
 
+Upload and extract archive (option ``-z``)::
+
+    $ ./supload.sh -u USERNAME -k USERKEY -z tar.bz2 storage_dir archive.tar.bz2
+
 
 Changes
 -------
+
+3.0:
+
+* unpack archive
+* improve handle error and debug output
+* add functional tests
 
 2.7:
 
