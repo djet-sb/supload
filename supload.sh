@@ -512,7 +512,7 @@ _upload() {
     resp_status="${resp_status#* }"
 
     # -- successful upload
-    if [ "$resp_status" == "201 Created" ]; then
+    if [[ "$resp_status" == "201 Created" || "$resp_status" == "200 OK" ]]; then
         # get hash for uploaded file (from response)
         etag=`echo "$response" | egrep -i -w -o "etag: .+" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/etag: //g'`
 
