@@ -495,6 +495,7 @@ _upload() {
 
     if [[ -n "$EXTRACT_ARCHIVE" ]]; then
         dest_url="${dest_url}?extract-archive=${EXTRACT_ARCHIVE}"
+        header_content_type="-Hx-detect-content-type:true"
     fi
 
     opts="${CURLOPTS}"
